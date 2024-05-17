@@ -1,0 +1,41 @@
+import FreeCAD as App
+
+doc = App.ActiveDocument
+
+print("---- BOM List ----")
+
+TypeId_Whitelist = [
+    "App::Part",
+    "App::Link",
+    "Part::FeaturePython"
+]
+
+
+def classify_object(object):
+    pass
+
+def quantity(object):
+    pass
+
+for RootObject in doc.RootObjects:
+	
+    if RootObject.TypeId == "App::Part":
+        print(f"({RootObject.TypeId}) {RootObject.Label}")
+
+        for ChildObjectName in RootObject.getSubObjects():
+
+            ChildObject = RootObject.getSubObject(ChildObjectName, retType=1)
+
+            if ChildObject.TypeId in TypeId_Whitelist:
+                
+                if ChildObject.TypeId == "Part::FeaturePython" and ChildObject.ArrayType == "Circular Array":
+                    SourceObject = ChildObject.SourceObject
+
+                    if SourceObject.TypeId == "App::Link":
+                        LinkedObject = SourceObject.LinkedObject
+                        print(f"    ({LinkedObject.TypeId}) {LinkedObject.Label} x{ChildObject.Count}")
+                    else:
+                        print(f"    ({SourceObject.TypeId}) {SourceObject.Label} x{ChildObject.Count}")
+                    
+                else:
+                    print(f"    ({ChildObject.TypeId}) {ChildObject.Label}")

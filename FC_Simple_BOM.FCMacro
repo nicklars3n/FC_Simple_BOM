@@ -11,31 +11,37 @@ TypeId_Whitelist = [
 ]
 
 
-def classify_object(object):
-    pass
+def traverse_object(object, level=0):
+    # Classify object
+    if object.TypeId == "App::Part" and object.Type == "Assembly":
+        print("-"*level + f"Assembly: ({object.TypeId}) {object.Label}")
 
-def quantity(object):
-    pass
+        # Go through child objects
+        for ChildObjectName in object.getSubObjects():
+            ChildObject = object.getSubObject(ChildObjectName, retType=1)
+            traverse_object(ChildObject, level+1)
+
+    elif object.TypeId == "App::Part":
+        print("-"*level + f"Part: ({object.TypeId}) {object.Label}")
+
+    elif object.TypeId == "App::Link":
+        # Follow Link
+        # print("-"*level + f"Link: ({object.TypeId}) {object.Label}")
+        LinkedObject = object.LinkedObject
+        traverse_object(LinkedObject, level)
+
+    elif object.TypeId == "Part::FeaturePython" and object.ArrayType == "Circular Array":
+        # print("-"*level + "Circular Array!")
+        SourceObject = object.SourceObject
+
+        for _ in range(object.Count):
+            traverse_object(SourceObject, level)
+
 
 for RootObject in doc.RootObjects:
+
+    ## Find Root Assembly
 	
-    if RootObject.TypeId == "App::Part":
-        print(f"({RootObject.TypeId}) {RootObject.Label}")
-
-        for ChildObjectName in RootObject.getSubObjects():
-
-            ChildObject = RootObject.getSubObject(ChildObjectName, retType=1)
-
-            if ChildObject.TypeId in TypeId_Whitelist:
-                
-                if ChildObject.TypeId == "Part::FeaturePython" and ChildObject.ArrayType == "Circular Array":
-                    SourceObject = ChildObject.SourceObject
-
-                    if SourceObject.TypeId == "App::Link":
-                        LinkedObject = SourceObject.LinkedObject
-                        print(f"    ({LinkedObject.TypeId}) {LinkedObject.Label} x{ChildObject.Count}")
-                    else:
-                        print(f"    ({SourceObject.TypeId}) {SourceObject.Label} x{ChildObject.Count}")
-                    
-                else:
-                    print(f"    ({ChildObject.TypeId}) {ChildObject.Label}")
+    if RootObject.TypeId == "App::Part" and RootObject.Type == "Assembly":
+        
+        traverse_object(RootObject)

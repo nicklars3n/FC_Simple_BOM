@@ -11,7 +11,6 @@ def traverse_object(object):
         return {
             "type": "assembly",
             "label": object.Label,
-            "quantity": 1,
             "children": [
                 y for child in children if (y := traverse_object(child)) is not None
             ]
@@ -21,7 +20,6 @@ def traverse_object(object):
         return {
             "type": "part",
             "label": object.Label,
-            "quantity": 1
         }
 
     elif object.TypeId == "App::Link":
@@ -29,9 +27,28 @@ def traverse_object(object):
 
     elif object.TypeId == "Part::FeaturePython" and object.ArrayType == "Circular Array":
         obj = traverse_object(object.SourceObject)
-        obj['quantity'] = object.Count
 
-        return obj
+        return [obj] * object.Count
+
+def dissolve_lists(object):
+    # take lists in child and break down
+    if object["type"] == "assembly":
+        
+        newchildren = []
+        # break objects out of lists
+        for child in object["children"]:
+            if isinstance(child, list):
+                for subchild in child:
+                    newchildren.append(subchild)
+            else:
+                newchildren.append(child)
+            
+        object["children"] = newchildren
+
+        # next level
+        for child in object["children"]:
+            dissolve_lists(child)
+
 
 def save(root_assem):
     direct = os.path.dirname(App.ActiveDocument.FileName)
@@ -55,5 +72,8 @@ if __name__=="__main__":
             
             root_assem = traverse_object(RootObject)
             break
+
+    
+    dissolve_lists(root_assem)
     
     save(root_assem)

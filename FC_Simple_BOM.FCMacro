@@ -1,47 +1,59 @@
 import FreeCAD as App
+import PySide2
+import os
+import json
 
-doc = App.ActiveDocument
-
-print("---- BOM List ----")
-
-TypeId_Whitelist = [
-    "App::Part",
-    "App::Link",
-    "Part::FeaturePython"
-]
-
-
-def traverse_object(object, level=0):
+def traverse_object(object):
     # Classify object
     if object.TypeId == "App::Part" and object.Type == "Assembly":
-        print("-"*level + f"Assembly: ({object.TypeId}) {object.Label}")
+        children = [object.getSubObject(name, retType=1) for name in object.getSubObjects()]
 
-        # Go through child objects
-        for ChildObjectName in object.getSubObjects():
-            ChildObject = object.getSubObject(ChildObjectName, retType=1)
-            traverse_object(ChildObject, level+1)
+        return {
+            "type": "assembly",
+            "label": object.Label,
+            "quantity": 1,
+            "children": [
+                y for child in children if (y := traverse_object(child)) is not None
+            ]
+        }
 
     elif object.TypeId == "App::Part":
-        print("-"*level + f"Part: ({object.TypeId}) {object.Label}")
+        return {
+            "type": "part",
+            "label": object.Label,
+            "quantity": 1
+        }
 
     elif object.TypeId == "App::Link":
-        # Follow Link
-        # print("-"*level + f"Link: ({object.TypeId}) {object.Label}")
-        LinkedObject = object.LinkedObject
-        traverse_object(LinkedObject, level)
+        return traverse_object(object.LinkedObject)
 
     elif object.TypeId == "Part::FeaturePython" and object.ArrayType == "Circular Array":
-        # print("-"*level + "Circular Array!")
-        SourceObject = object.SourceObject
+        obj = traverse_object(object.SourceObject)
+        obj['quantity'] = object.Count
 
-        for _ in range(object.Count):
-            traverse_object(SourceObject, level)
+        return obj
 
+def save(buffer):
+    direct = os.path.dirname(App.ActiveDocument.FileName)
+    SaveName, Filter = PySide2.QtWidgets.QFileDialog.getSaveFileName(None, "Save a json file", direct, "*.json")
 
-for RootObject in doc.RootObjects:
+    print(f"Saving to: {SaveName}")
+    with open(SaveName, "w", encoding="utf-8") as file:
+        json.dump(buffer, file, indent=4)
 
-    ## Find Root Assembly
-	
-    if RootObject.TypeId == "App::Part" and RootObject.Type == "Assembly":
-        
-        traverse_object(RootObject)
+if __name__=="__main__":
+    doc = App.ActiveDocument
+
+    print("---- BOM List ----")
+
+    buffer = []
+
+    for RootObject in doc.RootObjects:
+
+        ## Find Root Assembly
+        if RootObject.TypeId == "App::Part" and RootObject.Type == "Assembly":
+            
+            buffer = traverse_object(RootObject)
+            break
+    
+    save(buffer)

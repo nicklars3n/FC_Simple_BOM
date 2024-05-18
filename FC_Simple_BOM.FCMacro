@@ -33,13 +33,13 @@ def traverse_object(object):
 
         return obj
 
-def save(buffer):
+def save(root_assem):
     direct = os.path.dirname(App.ActiveDocument.FileName)
     SaveName, Filter = PySide2.QtWidgets.QFileDialog.getSaveFileName(None, "Save a json file", direct, "*.json")
 
     print(f"Saving to: {SaveName}")
     with open(SaveName, "w", encoding="utf-8") as file:
-        json.dump(buffer, file, indent=4)
+        json.dump(root_assem, file, indent=4)
 
 if __name__=="__main__":
     doc = App.ActiveDocument
@@ -53,7 +53,7 @@ if __name__=="__main__":
         ## Find Root Assembly
         if RootObject.TypeId == "App::Part" and RootObject.Type == "Assembly":
             
-            buffer = traverse_object(RootObject)
+            root_assem = traverse_object(RootObject)
             break
     
-    save(buffer)
+    save(root_assem)

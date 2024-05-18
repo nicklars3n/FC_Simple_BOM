@@ -49,6 +49,22 @@ def dissolve_lists(object):
         for child in object["children"]:
             dissolve_lists(child)
 
+def flatten(object, consolidated={}):
+    # flatten the tree, removing assemblies, consolidating parts by label
+
+    if object["type"] == "assembly":
+        for child in object["children"]:
+            flatten(child, consolidated)
+    
+    elif object["type"] == "part":
+        if object["label"] in consolidated:
+            consolidated[object["label"]]["quantity"] += 1
+        else:
+            consolidated[object["label"]] = {
+                "quantity": 1
+            }
+
+    return consolidated
 
 def save(root_assem):
     direct = os.path.dirname(App.ActiveDocument.FileName)
@@ -75,5 +91,7 @@ if __name__=="__main__":
 
     
     dissolve_lists(root_assem)
+
+    save(flatten(root_assem))
     
-    save(root_assem)
+    # save(root_assem)

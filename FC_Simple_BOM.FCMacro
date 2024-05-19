@@ -2,6 +2,7 @@ import FreeCAD as App
 import PySide2
 import os
 import json
+import csv
 
 def traverse_object(object):
     # Classify object
@@ -66,13 +67,31 @@ def flatten(object, consolidated={}):
 
     return consolidated
 
+def listify(object):
+    lst = []
+    for label in object:
+        object[label]["label"] = label
+        lst.append(object[label])
+
+    return lst
+
 def save(root_assem):
     direct = os.path.dirname(App.ActiveDocument.FileName)
-    SaveName, Filter = PySide2.QtWidgets.QFileDialog.getSaveFileName(None, "Save a json file", direct, "*.json")
+    SaveName, Filter = PySide2.QtWidgets.QFileDialog.getSaveFileName(None, "Export BOM", direct, "Javascript Object Notation (*.json);;Comma Delimited (*.csv)")
+    
+    print(f"Saving to: {SaveName} with filter {Filter}")
 
-    print(f"Saving to: {SaveName}")
-    with open(SaveName, "w", encoding="utf-8") as file:
-        json.dump(root_assem, file, indent=4)
+    if "*.json" in Filter:
+        with open(SaveName, "w", encoding="utf-8") as file:
+            json.dump(root_assem, file, indent=4)
+    elif "*.csv" in Filter:
+        with open(SaveName, "w", encoding="utf-8", newline="") as file:
+            fieldnames = ["label", "quantity"]
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+            writer.writeheader()
+            writer.writerows(root_assem)
+            
 
 if __name__=="__main__":
     doc = App.ActiveDocument
@@ -92,6 +111,9 @@ if __name__=="__main__":
     
     dissolve_lists(root_assem)
 
-    save(flatten(root_assem))
+    flat = flatten(root_assem)
+    list = listify(flat)
+
+    save(list)
     
     # save(root_assem)

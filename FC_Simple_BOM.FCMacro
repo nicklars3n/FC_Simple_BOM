@@ -12,15 +12,24 @@ def traverse_object(object):
         return {
             "type": "assembly",
             "label": object.Label,
+            "description": object.Label2,
             "children": [
                 y for child in children if (y := traverse_object(child)) is not None
             ]
         }
+    
+    elif object.TypeId == "App::DocumentObjectGroup":
+        children = [object.getSubObject(name, retType=1) for name in object.getSubObjects()]
+        
+        return [
+                y for child in children if (y := traverse_object(child)) is not None
+            ]
 
     elif object.TypeId == "App::Part":
         return {
             "type": "part",
             "label": object.Label,
+            "description": object.Label2,
         }
 
     elif object.TypeId == "App::Link":
@@ -51,7 +60,7 @@ def dissolve_lists(object):
             dissolve_lists(child)
 
 def flatten(object, consolidated={}):
-    # flatten the tree, removing assemblies, consolidating parts by label
+    # flatten the tree, removing assemblies, consolidating parts by name
 
     if object["type"] == "assembly":
         for child in object["children"]:
@@ -61,9 +70,8 @@ def flatten(object, consolidated={}):
         if object["label"] in consolidated:
             consolidated[object["label"]]["quantity"] += 1
         else:
-            consolidated[object["label"]] = {
-                "quantity": 1
-            }
+            consolidated[object["label"]] = object
+            consolidated[object["label"]]["quantity"] = 1
 
     return consolidated
 
@@ -86,7 +94,7 @@ def save(root_assem):
             json.dump(root_assem, file, indent=4)
     elif "*.csv" in Filter:
         with open(SaveName, "w", encoding="utf-8", newline="") as file:
-            fieldnames = ["label", "quantity"]
+            fieldnames = ["label", "description", "quantity"]
             writer = csv.DictWriter(file, fieldnames=fieldnames)
 
             writer.writeheader()
@@ -111,9 +119,9 @@ if __name__=="__main__":
     
     dissolve_lists(root_assem)
 
-    flat = flatten(root_assem)
-    list = listify(flat)
+    # flat = flatten(root_assem)
+    # list = listify(flat)
 
-    save(list)
+    # save(list)
     
-    # save(root_assem)
+    save(root_assem)

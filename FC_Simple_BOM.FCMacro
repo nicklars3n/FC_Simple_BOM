@@ -3,6 +3,7 @@ import PySide2
 import os
 import json
 import csv
+from FastenerBase import FSBaseObject
 
 def traverse_object(object):
     # Classify object
@@ -35,10 +36,30 @@ def traverse_object(object):
     elif object.TypeId == "App::Link":
         return traverse_object(object.LinkedObject)
 
-    elif object.TypeId == "Part::FeaturePython" and object.ArrayType == "Circular Array":
-        obj = traverse_object(object.SourceObject)
+    elif object.TypeId == "Part::FeaturePython":
+        if hasattr(object, 'ArrayType'):
+            if object.ArrayType == "Circular Array":
 
-        return [obj] * object.Count
+                obj = traverse_object(object.SourceObject)
+                return [obj] * object.Count
+        
+        print(str(object.Label))
+        if hasattr(object, 'Proxy'):
+            if isinstance(object.Proxy, FSBaseObject):
+
+                description = ""
+                if hasattr(object, 'Diameter'):
+                    description += f"{object.Diameter}"
+                if hasattr(object, 'Length'):
+                    description += f"x{object.Length}"
+                if hasattr(object, 'Type'):
+                    description += f" {object.Type}"
+
+                return {
+                    "type": "part",
+                    "label": object.Label,
+                    "description": description,
+                }
 
 def dissolve_lists(object):
     # take lists in child and break down

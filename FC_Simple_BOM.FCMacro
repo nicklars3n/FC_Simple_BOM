@@ -5,15 +5,26 @@ import json
 import csv
 from FastenerBase import FSBaseObject
 
-def traverse_object(object):
+def traverse_object(object, link_label="", link_descr=""):
+    label = object.Label
+    description = object.Label2
+
+    # apply link label (App::Link)
+    if link_label != "":
+        label = link_label
+    
+    # apply link description (App::Link)
+    if link_descr != "": # override description if provided
+        description = link_descr
+
     # Classify object
-    if object.TypeId == "App::Part" and object.Type == "Assembly":
+    if object.TypeId == "App::Part":
+
         children = [object.getSubObject(name, retType=1) for name in object.getSubObjects()]
 
         return {
-            "type": "assembly",
-            "label": object.Label,
-            "description": object.Label2,
+            "label": label,
+            "description": description,
             "children": [
                 y for child in children if (y := traverse_object(child)) is not None
             ]
@@ -26,81 +37,86 @@ def traverse_object(object):
                 y for child in children if (y := traverse_object(child)) is not None
             ]
 
-    elif object.TypeId == "App::Part":
-        return {
-            "type": "part",
-            "label": object.Label,
-            "description": object.Label2,
-        }
-
     elif object.TypeId == "App::Link":
-        return traverse_object(object.LinkedObject)
+        return traverse_object(object.LinkedObject, link_label=label, link_descr=description)
 
     elif object.TypeId == "Part::FeaturePython":
+        # Arrays
         if hasattr(object, 'ArrayType'):
             if object.ArrayType == "Circular Array":
 
                 obj = traverse_object(object.SourceObject)
                 return [obj] * object.Count
         
-        print(str(object.Label))
+        # Fasteners
         if hasattr(object, 'Proxy'):
             if isinstance(object.Proxy, FSBaseObject):
 
-                description = ""
-                if hasattr(object, 'Diameter'):
-                    description += f"{object.Diameter}"
-                if hasattr(object, 'Length'):
-                    description += f"x{object.Length}"
-                if hasattr(object, 'Type'):
-                    description += f" {object.Type}"
-
                 return {
-                    "type": "part",
-                    "label": object.Label,
+                    "label": label,
                     "description": description,
+                    "children": [],
                 }
 
 def dissolve_lists(object):
     # take lists in child and break down
-    if object["type"] == "assembly":
-        
-        newchildren = []
-        # break objects out of lists
-        for child in object["children"]:
-            if isinstance(child, list):
-                for subchild in child:
-                    newchildren.append(subchild)
-            else:
-                newchildren.append(child)
-            
-        object["children"] = newchildren
 
-        # next level
-        for child in object["children"]:
-            dissolve_lists(child)
-
-def flatten(object, consolidated={}):
-    # flatten the tree, removing assemblies, consolidating parts by name
-
-    if object["type"] == "assembly":
-        for child in object["children"]:
-            flatten(child, consolidated)
-    
-    elif object["type"] == "part":
-        if object["label"] in consolidated:
-            consolidated[object["label"]]["quantity"] += 1
+    newchildren = []
+    # break objects out of lists
+    for child in object["children"]:
+        if isinstance(child, list):
+            for subchild in child:
+                newchildren.append(subchild)
         else:
-            consolidated[object["label"]] = object
-            consolidated[object["label"]]["quantity"] = 1
+            newchildren.append(child)
+        
+    object["children"] = newchildren
+
+    # next level
+    for child in object["children"]:
+        dissolve_lists(child)
+
+def flatten(object, consolidated={}, label_prefix=""):
+    # flatten the tree, removing assemblies, consolidating parts by description
+    # labels are represented hierachically using dot separator
+
+    label = object["label"]
+
+    # apply label_prefix
+    if label_prefix != "":
+        label = label_prefix + "." + label
+
+    if len(object["children"]) > 0:
+        for child in object["children"]:
+            flatten(child, consolidated, label)
+    else:
+        key = object["description"]
+        if key == "":
+            key = object["label"] # revert to label in absense of description
+
+        if key in consolidated:
+            consolidated[key]["instances"] += 1
+            if label not in consolidated[key]["label"]: # only put unique labels
+                consolidated[key]["label"].append(label)
+        else:
+            consolidated[key] = {
+                "label": [label],
+                "description": object["description"],
+                "instances": 1,
+            }
 
     return consolidated
 
 def listify(object):
     lst = []
-    for label in object:
-        object[label]["label"] = label
-        lst.append(object[label])
+    for key in object:
+        # object[key]["description"] = key
+        
+        lst.append({
+            "label": ", ".join(object[key]["label"]),
+            "description": object[key]["description"],
+            "instances": object[key]["instances"],
+        })
 
     return lst
 
@@ -108,6 +124,10 @@ def save(root_assem):
     direct = os.path.dirname(App.ActiveDocument.FileName)
     SaveName, Filter = PySide2.QtWidgets.QFileDialog.getSaveFileName(None, "Export BOM", direct, "Javascript Object Notation (*.json);;Comma Delimited (*.csv)")
     
+    #testing
+    # SaveName, Filter = ("C:/Users/nickl/repos/postie_bike/test.csv", "*.csv")
+    # SaveName, Filter = ("C:/Users/nickl/repos/postie_bike/test.json", "*.json")
+
     print(f"Saving to: {SaveName} with filter {Filter}")
 
     if "*.json" in Filter:
@@ -115,7 +135,7 @@ def save(root_assem):
             json.dump(root_assem, file, indent=4)
     elif "*.csv" in Filter:
         with open(SaveName, "w", encoding="utf-8", newline="") as file:
-            fieldnames = ["label", "description", "quantity"]
+            fieldnames = ["label", "description", "instances"]
             writer = csv.DictWriter(file, fieldnames=fieldnames)
 
             writer.writeheader()
@@ -125,24 +145,18 @@ def save(root_assem):
 if __name__=="__main__":
     doc = App.ActiveDocument
 
-    print("---- BOM List ----")
-
     buffer = []
 
     for RootObject in doc.RootObjects:
-
         ## Find Root Assembly
         if RootObject.TypeId == "App::Part" and RootObject.Type == "Assembly":
-            
             root_assem = traverse_object(RootObject)
             break
 
     
     dissolve_lists(root_assem)
+    # save(root_assem)
 
-    # flat = flatten(root_assem)
-    # list = listify(flat)
-
-    # save(list)
-    
-    save(root_assem)
+    flat = flatten(root_assem)
+    list = listify(flat)
+    save(list)
